@@ -109,6 +109,15 @@ def multiblock(typeslist,length,reps,noise=0.01):
     return finallist
 
 def toydata2(noise=0.01,numblocks=10,blocksize=500,variance=0.1,periodicity=3,periodicityvariance=1,numfeatures=20):
+    '''
+    :param noise: Standard variation of normal noise
+    :param numblocks: Number of different segments
+    :param blocksize: Average segment size
+    :param variance: Variance in segment size. e^{-variance} to e^{variance} multiplier
+    :param periodicity: Number of periods in the average segment
+    :param periodicityvariance: Variation in numbers of periods per segments
+    :param numfeatures: number of features.
+    '''
     testdata=[]
     realboundaries=[0]
     for i in range(numblocks):
@@ -196,152 +205,7 @@ for key in segmentations:
     newkey=int(newkey)
     cmuboundaries[newkey]=[1]+[x['middle'] for x in segmentations[key]]
 
-def simmatrix1(numfeatures, testerino, timesteps):
-    '''
-    Makes a similarity matrix using inner product from slow feature data, using $numfeatures$ features, and $timesteps$ timesteps to make comparison vectors
-    :param numfeatures: Amount of features to be used for similarity matrix
-    :param testerino: Calculated slow features
-    :param timesteps: Amount of timesteps to be compared for similarity matrix
-    :return: Similarity matrix based on inner product
-    '''
-    vecmat = vectormatrix(numfeatures, testerino, timesteps)
-    selfsimmatrix = vecmat * vecmat.transpose()
-    return selfsimmatrix
 
-
-def simmatrix2(numfeatures,testerino,timesteps):
-    '''
-    Makes a similarity matrix using normalized euclidean distance from slow feature data, using $numfeatures$ features, and $timesteps$ timesteps to make comparison vectors
-    :param numfeatures: Amount of features to be used for similarity matrix
-    :param testerino: Calculated values of slow features
-    :param timesteps: Amount of timesteps for comparison in similarity matrix
-    :return: Similarity matrix with similarity calculated using e^{-distance/delta^2}. Atm delta is set manually. Possibly can be changed to computed from data
-    '''
-    vecmat=vectormatrix(numfeatures,testerino,timesteps)
-    delta=0.4
-    distmatrix=[]
-    for row1 in vecmat:
-        distmatrix.append([])
-        for row2 in vecmat:
-            distmatrix[-1].append(expdistance(row1,row2,delta))
-    return np.matrix(distmatrix)
-
-def slowestdtwmatrix(numfeatures,testerino,timesteps):
-    matrixerino=[]
-    finalmatrix=[]
-    for i in range(len(testerino[:-timesteps])):
-        matrixerino.append([])
-        for y in range(numfeatures):
-            helpvector=[]
-            for j in range(timesteps):
-                helpvector.append(testerino[i+j][y])
-            matrixerino[-1].append(np.matrix(np.array(helpvector).reshape(-1,1)))
-    for i in range(len(matrixerino)):
-        vectors1=matrixerino[i]
-        finalmatrix.append([])
-        print(str(i)+'/'+str(len(matrixerino)))
-        for j in range(len(matrixerino)):
-            if j%100==0:
-                print(j)
-            vectors2=matrixerino[j]
-            if i<=j:
-                dtwsum=0
-                for k in range(len(vectors1)):
-                    dtwsum+=dtw.dtw(vectors1[k],vectors2[k],dist=lambda x,y:np.linalg.norm(x-y))[0]
-                finalmatrix[-1].append(math.exp(-dtwsum)) #setting finalmatrix[i][j]
-            else:
-                finalmatrix[-1].append(finalmatrix[j][i])#We know this already exists, since j<=i and we've done all the [i][:]
-    return np.matrix(finalmatrix)
-
-def fastdtwmatrix(numfeatures,testerino,timesteps):
-    matrixerino=[]
-    finalmatrix=[]
-    for i in range(len(testerino[:-timesteps])):
-        matrixerino.append([])
-        for y in range(numfeatures):
-            helpvector=[]
-            for j in range(timesteps):
-                helpvector.append(testerino[i+j][y])
-            matrixerino[-1].append(np.matrix(np.array(helpvector).reshape(-1,1)))
-    for i in range(len(matrixerino)):
-        vectors1=matrixerino[i]
-        finalmatrix.append([])
-        print(str(i)+'/'+str(len(matrixerino)))
-        for j in range(len(matrixerino)):
-            if j%100==0:
-                print(j)
-            vectors2=matrixerino[j]
-            if i<=j:
-                dtwsum=0
-                for k in range(len(vectors1)):
-                    dtwsum+=fastdtw.dtw(vectors1[k],vectors2[k],dist=lambda x,y:np.linalg.norm(x-y))[0]
-                finalmatrix[-1].append(dtwsum) #setting finalmatrix[i][j]
-            else:
-                finalmatrix[-1].append(finalmatrix[j][i])#We know this already exists, since j<=i and we've done all the [i][:]
-    return np.matrix(finalmatrix)
-
-def hybriddtwmatrix(numfeatures,testerino,timesteps,windowsize):
-    matrixerino=[]
-    delta=0.4
-    finalmatrix=[]
-    for i in range(len(testerino[:-timesteps])):
-        matrixerino.append([])
-        for y in range(numfeatures):
-            helpvector=[]
-            for j in range(timesteps):
-                helpvector.append(testerino[i+j][y])
-            matrixerino[-1].append(np.matrix(np.array(helpvector).reshape(-1,1)))
-    for i in range(len(matrixerino)):
-        vectors1=matrixerino[i]
-        finalmatrix.append([])
-        print(str(i)+'/'+str(len(matrixerino)))
-        for j in range(len(matrixerino)):
-            vectors2=matrixerino[j]
-            if i<=j:
-                if i+windowsize<=j:
-                    newvector1=[vector.tolist() for vector in vectors1]
-                    newvector2=[vector.tolist() for vector in vectors2]
-                    newvector1=[item for sublist in newvector1 for item in sublist]
-                    newvector2 = [item for sublist in newvector2 for item in sublist]
-                    newvector1=np.array(newvector1)
-                    newvector2=np.array(newvector2)
-                    finalmatrix[-1].append(expdistance(newvector1,newvector2,delta))
-                else:
-                    dtwsum=0
-                    for k in range(len(vectors1)):
-                        dtwsum+=dtw.dtw(vectors1[k],vectors2[k],dist=lambda x,y:np.linalg.norm(x-y))[0]
-                    finalmatrix[-1].append(math.exp(-dtwsum)) #setting finalmatrix[i][j]
-            else:
-                finalmatrix[-1].append(finalmatrix[j][i])#We know this already exists, since j<=i and we've done all the [i][:]
-    return np.matrix(finalmatrix)
-def expdistance(vector1,vector2,delta):
-    '''
-    Calculates distance between two vectors, using formula e^{-(vector1-vector2)/delta)}
-    :param vector1:
-    :param vector2:
-    :param delta:
-    :return:
-    '''
-    distance=np.linalg.norm(vector1-vector2)
-    return np.exp(-distance/2*delta**2)
-
-def vectormatrix(numfeatures, testerino, timesteps):
-    '''
-    Takes testdata, timesteps, and the number of features and makes a matrix of timeseries vectors. If numfeatures=2, timesteps=2, first row would be [firstfeature[0],secondfeature[0],firstfeature[1],secondfeature[1]]
-    :param numfeatures: Number of features
-    :param testerino: Slow feature data
-    :param timesteps: Amount of timesteps considered for vector data
-    :return: Matrix of timeseries vectors. Should be len(testdata)-timesteps x timesteps*numfeatures size
-    '''
-    vectorized = []
-    offset = timesteps * numfeatures
-    for i in range(len(testerino[:-timesteps])):
-        vectorized.append([])
-        for j in range(timesteps):
-            for y in range(numfeatures):
-                vectorized[-1].append(testerino[i + j][y])
-    vectormatrix = np.matrix(vectorized)
-    return vectormatrix
 
 def reorder(intlist):
     '''
@@ -390,6 +254,9 @@ def evaluate_boundary(boundaries,binarylist):
 
 
 def find_boundary(binarylist):
+    '''
+    Finds the best boundary by trying out all possible boundaries and computing the score for it.
+    '''
     bestboundary=0
     bestboundaryvalue=100000000000
     for i in range(len(binarylist)):
@@ -401,9 +268,8 @@ def find_boundary(binarylist):
 
 def find_boundaries2(binarylist):
     '''
-    Find double boundaries. Don't htink we will ever do quadruple boundaries so ehh.
-    :param binarylist:
-    :return:
+    Find double boundaries. Don't htink we will ever do triple boundaries so ehh.
+
     '''
     bestboundaryvalue=2
     bestboundary=[0,0]
@@ -433,39 +299,6 @@ def find_boundariesold(binarylist):
                 bestboundary=[i,i+j]
     return (bestboundary,bestboundaryvalue)
 
-def find_boundarieskmeans(binarylist,numclusters,clusterimportance):
-    #We're making a custom k-means clustering
-    def customdifference(point1,point2):
-        if point1[0]==point2[0]:
-            modifier=0
-        else:
-            modifier=clusterimportance
-        return abs(point1[1]-point2[1])+modifier
-
-    size=len(binarylist)/numclusters
-    centers=[(i,size*i+size/2) for i in range(numclusters)] #Initial guess is evenly spread centroids. This should conform to our expectation
-    for i in range(25):
-        clusters = [([],centers[i]) for i in range(numclusters)]
-        for j in range(len(binarylist)):
-            value=binarylist[j]
-            point=[value,j]
-            bestcenter=min(centers,key=lambda x:customdifference(point,x)) #Allocation step
-            for cluster,center in clusters:
-                if center==bestcenter:
-                    cluster.append(point)
-            #Updating center
-        centers=[]
-        for cluster,center in clusters:
-            if len(cluster)>0:
-                clustervalue=np.mean([x[0] for x in cluster])
-                numericcenter=np.mean([x[1] for x in cluster])
-            else:
-                clustervalue=int(round(random.random()*numclusters))
-                numericcenter=random.random()*len(binarylist)
-            centers.append([int(round(clustervalue)),numericcenter])
-        #Here we get boundaries from the centers
-        boundaries=boundariesfromcenters(clusters)
-    return boundaries
 def boundariesfromcenters(clusterslist):
     '''
     Takes a clusterslist as defined in findboundarieskmeans, and gives out actual decision boundaries. We don't simply choose the middle, but instead choose a point based on the size of
@@ -573,6 +406,9 @@ def smoldata(sample):
 
 
 def findbestcenterapproach(binarylist,numclusters,windowsize):
+    '''
+    Alternative way of finding boundaries
+    '''
     centers=[]
     for i in range(numclusters):
 
@@ -587,313 +423,6 @@ def findbestcenterapproach(binarylist,numclusters,windowsize):
     return centers
 
 
-def ACAboundaries():
-    acaboundaries = {}
-    acaboundaries['truth'] = []
-    acaboundaries['gmm'] = []
-    acaboundaries['haca'] = []
-    acaboundaries['aca'] = []
-    for i in range(10):
-        sample=i+1
-        string='C:/Users/lkohlhase/Desktop/ACAData/rawboundaries'+str(sample)
-        f = open(string, 'r')
-
-        for line in f:
-            if 'Ground' in line:
-                identifier='truth'
-                wrongerino=True
-            if 'Gmm' in line:
-                identifier='gmm'
-                wrongerino=True
-            if 'HACA' in line:
-                identifier='haca'
-                wrongerino=True
-            elif 'ACA' in line:
-                identifier='aca'
-                wrongerino=True
-            if '1' in line:
-                wrongerino=True
-                acaboundaries[identifier].append(line.split(' ')[:-1])
-                acaboundaries[identifier][-1]=[int(x) for x in acaboundaries[identifier][-1]]
-    pickle.dump(acaboundaries,open('acaboundaries','wb'))
-
-def ACAboundaries2():
-    acaboundaries = {}
-    acaboundaries['truth'] = []
-    acaboundaries['gmm'] = []
-    acaboundaries['haca'] = []
-    acaboundaries['aca'] = []
-    for i in range(10):
-        sample=i+1
-        string='C:/Users/lkohlhase/Desktop/ACAData/featureACAboundaries'+str(sample)
-        f = open(string, 'r')
-
-        for line in f:
-            if 'Ground' in line:
-                identifier='truth'
-                wrongerino=True
-            if 'Gmm' in line:
-                identifier='gmm'
-                wrongerino=True
-            if 'HACA' in line:
-                identifier='haca'
-                wrongerino=True
-            elif 'ACA' in line:
-                identifier='aca'
-                wrongerino=True
-            if '1' in line:
-                wrongerino=True
-                acaboundaries[identifier].append(line.split(' ')[:-1])
-                acaboundaries[identifier][-1]=[int(x) for x in acaboundaries[identifier][-1]]
-    pickle.dump(acaboundaries,open('featureacaboundaries','wb'))
-
-def ACAboundaries3():
-    acaboundaries = {}
-    acaboundaries['truth'] = []
-    acaboundaries['gmm'] = []
-    acaboundaries['haca'] = []
-    acaboundaries['aca'] = []
-    for i in range(9):
-        sample=i+1
-        string='C:/Users/lkohlhase/Desktop/ACAData/realACAboundaries'+str(sample)
-        f = open(string, 'r')
-
-        for line in f:
-            if 'Ground' in line:
-                identifier='truth'
-                wrongerino=True
-            if 'Gmm' in line:
-                identifier='gmm'
-                wrongerino=True
-            if 'HACA' in line:
-                identifier='haca'
-                wrongerino=True
-            elif 'ACA' in line:
-                identifier='aca'
-                wrongerino=True
-            if '1' in line:
-                wrongerino=True
-                acaboundaries[identifier].append(line.split(' ')[:-1])
-                acaboundaries[identifier][-1]=[int(x) for x in acaboundaries[identifier][-1]]
-    pickle.dump(acaboundaries,open('realacaboundaries','wb'))
-
-def tsfareducedfive():
-    acaboundaries = {}
-    acaboundaries['truth'] = []
-    acaboundaries['gmm'] = []
-    acaboundaries['haca'] = []
-    acaboundaries['aca'] = []
-    for i in range(9):
-        sample=i+1
-        string='C:/Users/lkohlhase/Desktop/ACAData/treducedsfafive'+str(sample)
-        f = open(string, 'r')
-
-        for line in f:
-            if 'Ground' in line:
-                identifier='truth'
-                wrongerino=True
-            if 'Gmm' in line:
-                identifier='gmm'
-                wrongerino=True
-            if 'HACA' in line:
-                identifier='haca'
-                wrongerino=True
-            elif 'ACA' in line:
-                identifier='aca'
-                wrongerino=True
-            if '1' in line:
-                wrongerino=True
-                acaboundaries[identifier].append(line.split(' ')[:-1])
-                acaboundaries[identifier][-1]=[int(x) for x in acaboundaries[identifier][-1]]
-    pickle.dump(acaboundaries,open('treducedsfafive','wb'))
-
-def tsfareducedtwenty():
-    acaboundaries = {}
-    acaboundaries['truth'] = []
-    acaboundaries['gmm'] = []
-    acaboundaries['haca'] = []
-    acaboundaries['aca'] = []
-    for i in range(9):
-        sample=i+1
-        string='C:/Users/lkohlhase/Desktop/ACAData/treducedsfatwenty'+str(sample)
-        f = open(string, 'r')
-
-        for line in f:
-            if 'Ground' in line:
-                identifier='truth'
-                wrongerino=True
-            if 'Gmm' in line:
-                identifier='gmm'
-                wrongerino=True
-            if 'HACA' in line:
-                identifier='haca'
-                wrongerino=True
-            elif 'ACA' in line:
-                identifier='aca'
-                wrongerino=True
-            if '1' in line:
-                wrongerino=True
-                acaboundaries[identifier].append(line.split(' ')[:-1])
-                acaboundaries[identifier][-1]=[int(x) for x in acaboundaries[identifier][-1]]
-    pickle.dump(acaboundaries,open('treducedsfatwenty','wb'))
-def tsfareducedfull():
-    acaboundaries = {}
-    acaboundaries['truth'] = []
-    acaboundaries['gmm'] = []
-    acaboundaries['haca'] = []
-    acaboundaries['aca'] = []
-    for i in range(9):
-        sample=i+1
-        string='C:/Users/lkohlhase/Desktop/ACAData/treducedsfafull'+str(sample)
-        f = open(string, 'r')
-
-        for line in f:
-            if 'Ground' in line:
-                identifier='truth'
-                wrongerino=True
-            if 'Gmm' in line:
-                identifier='gmm'
-                wrongerino=True
-            if 'HACA' in line:
-                identifier='haca'
-                wrongerino=True
-            elif 'ACA' in line:
-                identifier='aca'
-                wrongerino=True
-            if '1' in line:
-                wrongerino=True
-                acaboundaries[identifier].append(line.split(' ')[:-1])
-                acaboundaries[identifier][-1]=[int(x) for x in acaboundaries[identifier][-1]]
-    pickle.dump(acaboundaries,open('treducedsfafull','wb'))
-
-def truetoydata():
-    acaboundaries = {}
-    acaboundaries['truth'] = []
-    acaboundaries['gmm'] = []
-    acaboundaries['haca'] = []
-    acaboundaries['aca'] = []
-    for i in range(9):
-        sample=i+1
-        string='C:/Users/lkohlhase/Desktop/ACAData/truetoydata'+str(sample)
-        f = open(string, 'r')
-
-        for line in f:
-            if 'Ground' in line:
-                identifier='truth'
-                wrongerino=True
-            if 'Gmm' in line:
-                identifier='gmm'
-                wrongerino=True
-            if 'HACA' in line:
-                identifier='haca'
-                wrongerino=True
-            elif 'ACA' in line:
-                identifier='aca'
-                wrongerino=True
-            if '1' in line:
-                wrongerino=True
-                acaboundaries[identifier].append(line.split(' ')[:-1])
-                acaboundaries[identifier][-1]=[int(x) for x in acaboundaries[identifier][-1]]
-    pickle.dump(acaboundaries,open('truetoydata','wb'))
-
-def truetoydatafeatures():
-    acaboundaries = {}
-    acaboundaries['truth'] = []
-    acaboundaries['gmm'] = []
-    acaboundaries['haca'] = []
-    acaboundaries['aca'] = []
-    for i in range(9):
-        sample=i+1
-        string='C:/Users/lkohlhase/Desktop/ACAData/truetoydatafeatures'+str(sample)
-        f = open(string, 'r')
-
-        for line in f:
-            if 'Ground' in line:
-                identifier='truth'
-                wrongerino=True
-            if 'Gmm' in line:
-                identifier='gmm'
-                wrongerino=True
-            if 'HACA' in line:
-                identifier='haca'
-                wrongerino=True
-            elif 'ACA' in line:
-                identifier='aca'
-                wrongerino=True
-            if '1' in line:
-                wrongerino=True
-                acaboundaries[identifier].append(line.split(' ')[:-1])
-                acaboundaries[identifier][-1]=[int(x) for x in acaboundaries[identifier][-1]]
-    pickle.dump(acaboundaries,open('truetoydatafeatures','wb'))
-
-def toydatafeature():
-    acaboundaries = {}
-    for j in range(3):
-        acaboundaries[j]={}
-        for i in range(14):
-            acaboundaries[j][i]={}
-            sample=i+1
-            string='C:/Users/lkohlhase/Desktop/ACAData/toydatafeature'+str(j)+str(i)
-            f = open(string, 'r')
-
-            for line in f:
-                if 'Ground' in line:
-                    identifier='truth'
-                    wrongerino=True
-                if 'Gmm' in line:
-                    identifier='gmm'
-                    wrongerino=True
-                if 'HACA' in line:
-                    identifier='haca'
-                    wrongerino=True
-                elif 'ACA' in line:
-                    identifier='aca'
-                    wrongerino=True
-                if '1' in line:
-                    wrongerino=True
-                    acaboundaries[j][i][identifier]=line.split(' ')[:-1]
-                    acaboundaries[j][i][identifier]=[int(x) for x in acaboundaries[j][i][identifier]]
-        pickle.dump(acaboundaries,open('toydatafeature','wb'))
-
-def toydatafull():
-    acaboundaries = {}
-    for j in range(3):
-        acaboundaries[j]={}
-        for i in range(14):
-            acaboundaries[j][i]={}
-            sample=i+1
-            string='C:/Users/lkohlhase/Desktop/ACAData/toydatafull'+str(j)+str(i)
-            f = open(string, 'r')
-
-            for line in f:
-                if 'Ground' in line:
-                    identifier='truth'
-                    wrongerino=True
-                if 'Gmm' in line:
-                    identifier='gmm'
-                    wrongerino=True
-                if 'HACA' in line:
-                    identifier='haca'
-                    wrongerino=True
-                elif 'ACA' in line:
-                    identifier='aca'
-                    wrongerino=True
-                if '1' in line:
-                    wrongerino=True
-                    acaboundaries[j][i][identifier]=line.split(' ')[:-1]
-                    acaboundaries[j][i][identifier]=[int(x) for x in acaboundaries[j][i][identifier]]
-        pickle.dump(acaboundaries,open('toydatafull','wb'))
-toydatafull=pickle.load(open('toydatafull','rb'))
-toydatafeature=pickle.load(open('toydatafeature','rb'))
-truetoydatafeatures=pickle.load(open('truetoydatafeatures','rb'))
-truetoydata=pickle.load(open('truetoydata','rb'))
-treducedsfafull=pickle.load(open('treducedsfafull','rb'))
-treducedsfatwenty=pickle.load(open('treducedsfatwenty','rb'))
-treducedsfafive=pickle.load(open('treducedsfafive','rb'))
-acaboundaries=pickle.load(open('acaboundaries','rb'))
-featureacaboundaries=pickle.load(open('featureacaboundaries','rb'))
-realacaboundaries=pickle.load(open('realacaboundaries','rb'))
-
 # NOTE THIS IS NOT HACA
 othersegmentationstuff=[[1,137,145,285,314,488,534,615,628,817 ,1018,1145]
 ,[1, 247,273,457,480,654,673,789,1178,1491,1510,1631,1803,1881,1974,2067,2212,2220,2384,2414,2654],
@@ -905,23 +434,7 @@ othersegmentationstuff=[[1,137,145,285,314,488,534,615,628,817 ,1018,1145]
 [1,7,  272,  293,  464,  479,  663,  681,  826,  833,  987, 1195, 1221, 1402, 1417, 1586, 1789, 1800, 2027, 2047,2301],
  [1,   248 ,  347 ,  526   ,538  , 714 ,  738  , 901   ,925,1200]] #Cuts performed on samples 1-9 by Efficient unsupervised algorithm.
 toydatashapes=['rect', 'triangle', 'sine','zigzag','step']
-# testdata=[0 for i in range(500)]+[int(random.random()*2) for i in range(200)]+[1 for i in range(500)]+[2 for i in range(500)]
-# print(find_boundarieskmeans(testdata,3,600))
-# asdf=pickle.load(open('Logs/manywindows32','rb'))
-# asdf=reorder(asdf[3])
-# boundaryscenter=findbestcenterapproach(asdf,10,250)
-# for point,quality in boundaryscenter:
-#     plt.plot([point,point],[0,10],c='red')
-# centers=find_boundarieskmeans(asdf,10,250 )
-# centers.sort(key=lambda x:x[1])
-# actualboundaries=[(centers[i][1]+centers[i+1][1])/2. for i in range(len(centers[1:]))]
-# for boundary in actualboundaries:
-#     plt.plot([boundary,boundary],[0,10],c='blue')
-# plt.plot(range(len(asdf)),asdf,'x')
-# plt.show()
-# testtestdaata=[1 for x in range(500)]+[3 for x in range(51)]+[1 for x in range(500)]+[2 for x in range(1000)]
-# asdf=clusteringheuristic1(testtestdaata,1000)
-# print(asdf[450:650])
+
 
 
 
