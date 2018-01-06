@@ -8,16 +8,15 @@ import time
 import dtw
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
-def logcounter(filename):
-    file = open('Logs/'+filename, 'r')
-    counter = int(file.read())
-    file.close()
-    file = open('Logs/'+filename, 'w')
-    file.write(str(counter + 1))
-    file.close()
-    return counter
+
 
 def GetSFAValuesFromData(data,numfeatures=3, reducenumber=10):
+    '''
+    :param data: data to work on
+    :param numfeatures: number of features to extract
+    :param reducenumber: reduction to be used with PCA
+    :return: Returns slow feature values of the data
+    '''
     testdata=pca_reduce(data,reducenumber)
     sfanode=mdp.nodes.SFANode()
     expansionnode = mdp.nodes.PolynomialExpansionNode(2)
@@ -44,7 +43,12 @@ def GetClusteringFromData(data, numclusters=2,numfeatures=3, reducenumber=10, ti
     return boundary, binarylist, featurevalues
 
 def find_boundarieskmeans(binarylist,numclusters,clusterimportance):
-    #We're making a custom k-means clustering
+    '''
+    :param binarylist: list of clustering labels
+    :param numclusters: number of clusters to identify
+    :param clusterimportance: mu as discussed in thesis, normally expected segmentsize*0.5
+    :return:boundaries detected using kboundaries
+    '''
     def customdifference(point1,point2):
         if point1[0]==point2[0]:
             modifier=0
@@ -95,6 +99,16 @@ def boundariesfromcenters(clusterslist):
     return boundaries
 
 def FullBatch(testdata,numclusters,w, numfeatures=5,reducenumber=10,timesteps=20,config='euc0s'):
+    '''
+    Detects segmentation boundaries using batchSFAS method
+    :param testdata: data
+    :param numclusters: Number of clusters to look for
+    :param w: Expected segment size *1.5
+    :param numfeatures: Number of features to use
+    :param reducenumber: Reduction
+    :param timesteps: number of timesteps used for constructing Similarity matrix
+    :param config: What type of similarity matrix to use
+    '''
     print('Dimensions of data are: '+str(testdata.shape))
     testdata=pca_reduce(testdata,reducenumber)
     sfanode=mdp.nodes.SFANode()
@@ -107,65 +121,6 @@ def FullBatch(testdata,numclusters,w, numfeatures=5,reducenumber=10,timesteps=20
     feature_values=sfanode.execute(testdata,n=numfeatures)
     print('Constructing Simlarity Matrix')
     S=MakeSimilarityMatrix(feature_values,w,config=config,numfeatures=numfeatures,timesteps=timesteps)
-
-    clusterer = cluster.SpectralClustering(n_clusters=numclusters, affinity='precomputed')
-    print('Clustering')
-    clusterlabellist = clusterer.fit_predict(S)
-    clusterlabellist = generate_data.reorder(clusterlabellist)
-    clusterlabellist = clusteringheuristic1(clusterlabellist,int(w))
-    clusterlabellist = clusteringheuristic2(clusterlabellist,int(w),S)
-    print('Finding boundaries')
-    boundaries=find_boundarieskmeans(clusterlabellist,numclusters,w/2)
-
-    return boundaries
-
-def noSFAFullBatch(testdata,numclusters,w, numfeatures=5,reducenumber=20,timesteps=20):
-    print('Dimensions of data are: '+str(testdata.shape))
-    feature_values=pca_reduce(testdata,5)
-
-    print('Constructing Similarity Matrix')
-    S=MakeSimilarityMatrix(feature_values,w,config='euc0s',numfeatures=numfeatures,timesteps=timesteps,Delta=30)
-
-    clusterer = cluster.SpectralClustering(n_clusters=numclusters, affinity='precomputed')
-    print('Clustering')
-    plt.matshow(S)
-
-    clusterlabellist = clusterer.fit_predict(S)
-    print('clustering2')
-    clusterlabellist = generate_data.reorder(clusterlabellist)
-    clusterlabellist = clusteringheuristic1(clusterlabellist,int(w))
-    clusterlabellist = clusteringheuristic2(clusterlabellist,int(w),S)
-    print('Finding boundaries')
-    boundaries=find_boundarieskmeans(clusterlabellist,numclusters,w/2)
-
-    return boundaries
-def noSFAFullBatch2(testdata,numclusters,w, numfeatures=5,reducenumber=20,timesteps=20):
-    print('Dimensions of data are: '+str(testdata.shape))
-    feature_values=testdata
-
-    print('Constructing Similarity Matrix')
-    S=MakeSimilarityMatrix(feature_values,w,config='euc0s',numfeatures=feature_values.shape[1],timesteps=timesteps,Delta=90)
-
-    clusterer = cluster.SpectralClustering(n_clusters=numclusters, affinity='precomputed')
-    print('Clustering')
-    plt.matshow(S)
-
-    clusterlabellist = clusterer.fit_predict(S)
-    clusterlabellist = generate_data.reorder(clusterlabellist)
-    clusterlabellist = clusteringheuristic1(clusterlabellist,int(w))
-    clusterlabellist = clusteringheuristic2(clusterlabellist,int(w),S)
-    print('Finding boundaries')
-    boundaries=find_boundarieskmeans(clusterlabellist,numclusters,w/2)
-
-    return boundaries
-
-def noSFAFullBatch3(testdata,numclusters,w, numfeatures=5,reducenumber=20,timesteps=20):
-    print('Dimensions of data are: '+str(testdata.shape))
-    feature_values=testdata[:,:5]
-
-    print('Constructing Simlarity Matrix')
-    S=MakeSimilarityMatrix(feature_values,w,config='euc0s',numfeatures=numfeatures,timesteps=timesteps,Delta=30)
-    plt.matshow(S)
 
     clusterer = cluster.SpectralClustering(n_clusters=numclusters, affinity='precomputed')
     print('Clustering')
@@ -349,6 +304,16 @@ def MakeSimilarityMatrix(SFAvalues,w,config='euc0s',numfeatures=5,timesteps=20,D
     return np.matrix(S)
 
 def minibatch(data,steplength,numfeatures=5,reducenumber=10,timesteps=20,Delta=3.5):
+    '''
+    Detects segmentation boundaries using minibatchSFAS
+    :param data: data to test on
+    :param steplength: Steplength to use for minibatch
+    :param numfeatures: number of features to use
+    :param reducenumber: reduction used for speed
+    :param timesteps: number of timesteps used to similarity matrix construction
+    :param Delta: Delta used for normalization
+    :return:
+    '''
     currentboundary=0
     currentsteplength=steplength
     boundaries=[]
@@ -378,99 +343,11 @@ def minibatch(data,steplength,numfeatures=5,reducenumber=10,timesteps=20,Delta=3
         boundaries.append(currentboundary)
     return boundaries
 
-def noSFAminibatch(data,steplength,numfeatures=5,reducenumber=10,timesteps=20,Delta=3.5):
-    currentboundary=0
-    currentsteplength=steplength
-    boundaries=[]
-    while(currentboundary+currentsteplength*0.66<len(data)):
-        print('Current step length is: '+str(currentsteplength))
-        currentdata=data[currentboundary:currentboundary+currentsteplength]
-        currentdata = pca_reduce(currentdata, 5)
-        feature_values=currentdata
-        S=MakeSimilarityMatrix(feature_values,100,config='euclid',numfeatures=numfeatures,timesteps=timesteps,Delta=Delta)
-        clusterer = cluster.SpectralClustering(n_clusters=2, affinity='precomputed')
-        clusterlabellist = clusterer.fit_predict(S)
-        clusterlabellist = generate_data.reorder(clusterlabellist)
-        boundary = generate_data.find_boundary(clusterlabellist)
-        currentboundary+=boundary[0]
-        print(boundary[0])
-        if boundary[0]==0:
-            print('Increasing window size by 20%')
-            currentsteplength=int(1.2*currentsteplength)
-        else:
-            currentsteplength=steplength
-        print('Found new boundary at '+str(currentboundary))
-        boundaries.append(currentboundary)
-    return boundaries
-
-def noSFAminibatch3(data,steplength,numfeatures=5,reducenumber=10,timesteps=20,Delta=3.5):
-    currentboundary=0
-    currentsteplength=steplength
-    boundaries=[]
-    while(currentboundary+currentsteplength*0.66<len(data)):
-        print('Current step length is: '+str(currentsteplength))
-        currentdata=data[currentboundary:currentboundary+currentsteplength]
-        feature_values=currentdata[:,:5]
-        S=MakeSimilarityMatrix(feature_values,100,config='euclid',numfeatures=numfeatures,timesteps=timesteps,Delta=Delta)
-        clusterer = cluster.SpectralClustering(n_clusters=2, affinity='precomputed')
-        clusterlabellist = clusterer.fit_predict(S)
-        clusterlabellist = generate_data.reorder(clusterlabellist)
-        boundary = generate_data.find_boundary(clusterlabellist)
-        currentboundary+=boundary[0]
-        print(boundary[0])
-        if boundary[0]==0:
-            print('Increasing window size by 20%')
-            currentsteplength=int(1.2*currentsteplength)
-        else:
-            currentsteplength=steplength
-        print('Found new boundary at '+str(currentboundary))
-        boundaries.append(currentboundary)
-    return boundaries
-
-def noSFAminibatch2(data,steplength,numfeatures=5,reducenumber=10,timesteps=20,Delta=10):
-    currentboundary=0
-    currentsteplength=steplength
-    boundaries=[]
-    while(currentboundary+currentsteplength*0.66<len(data)):
-        print('Current step length is: '+str(currentsteplength))
-        currentdata=data[currentboundary:currentboundary+currentsteplength]
-        feature_values=currentdata
-        S=MakeSimilarityMatrix(feature_values,100,config='euclid',numfeatures=feature_values.shape[1],timesteps=timesteps,Delta=Delta)
-        clusterer = cluster.SpectralClustering(n_clusters=2, affinity='precomputed')
-        clusterlabellist = clusterer.fit_predict(S)
-        clusterlabellist = generate_data.reorder(clusterlabellist)
-        boundary = generate_data.find_boundary(clusterlabellist)
-        currentboundary+=boundary[0]
-        print(boundary[0])
-        if boundary[0]==0:
-            print('Increasing window size by 20%')
-            currentsteplength=int(1.2*currentsteplength)
-        else:
-            currentsteplength=steplength
-        print('Found new boundary at '+str(currentboundary))
-        boundaries.append(currentboundary)
-    return boundaries
-def minibatchold(data,steplength,numfeatures=5,reducenumber=10,timesteps=20,numclusters=2):
-    currentmiddleboundary=0
-    boundaries=[]
-    currentsteplength=steplength
-    while (currentmiddleboundary+currentsteplength*0.66<len(data)): #Aka if we still have a relatively full window at the end.
-        currentdata=data[currentmiddleboundary:currentmiddleboundary+currentsteplength]
-        currentdata=np.array([k for k in currentdata])
-        boundary,binlist,featurevalues=GetClusteringFromData(currentdata,reducenumber=reducenumber,numfeatures=numfeatures,timesteps=timesteps,numclusters=numclusters)
-
-        currentmiddleboundary+=boundary[0]
-        if boundary[0]!=0:
-            currentsteplength=steplength
-        else:
-            print("Didn't find a boundary, increasing search range")
-            currentsteplength*=1.2
-        print(currentmiddleboundary)
-        print(boundary )
-        boundaries.append((currentmiddleboundary,boundary[1]))
-    return boundaries
 
 def tripledouble(data,numfeatures,steplength,reducenumber,timesteps=20):
+    '''
+    tripledouble variation of minibatch. Same parameters as minibatch
+    '''
     startpoints=[]
     grace=0.25*steplength
     currentstartpoint=0
@@ -510,6 +387,12 @@ def pca_reduce(testdata,numdimensions):
     return pcanode.execute(testdata)
 
 def boundaryevaluate(boundaries,truth):
+    '''
+    Calculates scores and missed for detected boundaries versus ground truth
+    :param boundaries:
+    :param truth: in the format of a list of (trueboundary,[range1,range2]) where range1<range2
+    :return: (Error,missed)
+    '''
     divergence=0
     missed=0
     found=0
@@ -539,6 +422,9 @@ def boundaryevaluate(boundaries,truth):
         return divergence/float(found),missed
 
 def boundaryevaluate2(boundaries,truth,rangesize=50):
+    '''
+    Same as boundaryevaluate, except with default rangesize of 50, if we have no truth ranges.
+    '''
     divergence=0
     missed=0
     found=0
@@ -571,7 +457,7 @@ def boundaryevaluate2(boundaries,truth,rangesize=50):
 
 def showsegmentation(sevboundaries,defaultscale):
     '''
-    Takes a list of boundaries with labels, and then makes  a graph showing them with boxes and shit.
+    Takes a list of boundaries with labels, and then makes  a graph displaying things.
     :param sevboundaries: a list of boundaries of the format (boundaries,label), where we assume that the boundaries include 0 and end at the end of data.
     :param defaultscale:
     :return:
@@ -596,6 +482,13 @@ def showsegmentation(sevboundaries,defaultscale):
         ax.set_yticks([])
 
 def comparetotruth(truth,severalsits,scalerino2):
+    '''
+    Compares various boundaries to ground truth
+    :param truth:
+    :param severalsits: lists of boundaries
+    :param scalerino2: scalefactor for text placement
+    :return:
+    '''
     plt.figure()
     colors=['red','yellow','blue','orange']
     hatches=['-','+','x','o']
